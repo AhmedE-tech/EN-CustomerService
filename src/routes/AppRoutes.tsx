@@ -8,6 +8,7 @@ import ComplaintsPage from '../pages/ComplaintsPage';
 import ComplaintDetailPage from '../pages/ComplaintDetailPage';
 import TicketsPage from '../pages/TicketsPage';
 import OperationalRequestsPage from '../pages/OperationalRequestsPage';
+import ComplaintsHistoryPage from '../pages/ComplaintsHistoryPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -51,6 +52,10 @@ export default function AppRoutes() {
       <Route
         path="/operational-requests"
         element={<ProtectedRoute><OperationalRequestsPage /></ProtectedRoute>}
+      />
+      <Route
+        path="/history"
+        element={<ProtectedRoute><ComplaintsHistoryPage /></ProtectedRoute>}
       />
       <Route path="*" element={<Navigate to="/queue" replace />} />
     </Routes>

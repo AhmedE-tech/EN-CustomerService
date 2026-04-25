@@ -5,6 +5,7 @@ import {
   AlertCircle,
   MessageSquare,
   Send,
+  Archive,
   LogOut,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,6 +14,7 @@ const navItems = [
   { path: '/queue', label: 'Queue', icon: LayoutDashboard },
   { path: '/clients', label: 'Client Search', icon: Search },
   { path: '/complaints', label: 'Complaints', icon: AlertCircle },
+  { path: '/history', label: 'History', icon: Archive },
   { path: '/tickets', label: 'Support Tickets', icon: MessageSquare },
   { path: '/operational-requests', label: 'Operational Requests', icon: Send },
 ];

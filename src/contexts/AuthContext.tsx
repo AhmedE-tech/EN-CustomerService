@@ -78,17 +78,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     let mounted = true;
 
-    supabase
-      .from('users')
-      .select('role, full_name')
-      .eq('id', user.id)
-      .single()
-      .then(({ data, error }) => {
+    const fetchRole = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('role, full_name')
+          .eq('id', user.id)
+          .single();
+          
         if (!mounted || error || !data) return;
         setRole(data.role ?? null);
         setFullName(data.full_name ?? null);
-      })
-      .catch(() => {});
+      } catch (err) {
+        // ignore
+      }
+    };
+    
+    fetchRole();
 
     return () => { mounted = false; };
   }, [user?.id]);

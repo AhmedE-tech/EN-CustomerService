@@ -1,8 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import Spinner from '../components/ui/Spinner';
 import Banner from '../components/ui/Banner';
+import Modal from '../components/ui/Modal';
 import {
   fetchComplaintDetail,
   addComplaintInteraction,
@@ -19,6 +22,7 @@ import {
   Shield,
   Video,
   AlertCircle,
+  AlertTriangle,
   Send,
   ChevronDown,
 } from 'lucide-react';
@@ -38,12 +42,20 @@ export default function ComplaintDetailPage() {
   // Status management
   const [showStatusSelect, setShowStatusSelect] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [mutationLoading, setMutationLoading] = useState(false);
+
+  // Confirmation modals
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
 
   // Pending on
   const [pendingOn, setPendingOn] = useState('');
 
   // Video status
   const [showVideoSelect, setShowVideoSelect] = useState(false);
+
+  const { role } = useAuth();
+  const isManagement = role === 'ceo' || role === 'admin' || role === 'leader';
 
   const load = useCallback(async (silent = false) => {
     if (!complaintId) return;
@@ -125,6 +137,47 @@ export default function ComplaintDetailPage() {
     }
   };
 
+  // ─── Direct RPC Actions (Management Only) ───
+  const handleCloseComplaint = async () => {
+    if (!complaintId) return;
+    try {
+      setMutationLoading(true);
+      const { error: rpcError } = await supabase.rpc('cs_update_complaint_status', {
+        p_complaint_id: complaintId,
+        p_new_status: 'closed',
+      });
+      if (rpcError) throw rpcError;
+      setShowCloseModal(false);
+      setShowStatusSelect(false);
+      setSuccess('Complaint has been closed.');
+      await load(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to close complaint');
+    } finally {
+      setMutationLoading(false);
+    }
+  };
+
+  const handleRejectComplaint = async () => {
+    if (!complaintId) return;
+    try {
+      setMutationLoading(true);
+      const { error: rpcError } = await supabase.rpc('cs_update_complaint_status', {
+        p_complaint_id: complaintId,
+        p_new_status: 'rejected',
+      });
+      if (rpcError) throw rpcError;
+      setShowRejectModal(false);
+      setShowStatusSelect(false);
+      setSuccess('Complaint has been rejected.');
+      await load(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reject complaint');
+    } finally {
+      setMutationLoading(false);
+    }
+  };
+
   // ─── Update video status ───
   const handleVideoStatusUpdate = async (newVideoStatus: string) => {
     if (!complaintId) return;
@@ -169,6 +222,76 @@ export default function ComplaintDetailPage() {
     <DashboardLayout title="Complaint Detail">
       {error && <Banner type="error" message={error} onDismiss={() => setError(null)} autoDismissMs={4000} />}
       {success && <Banner type="success" message={success} onDismiss={() => setSuccess(null)} autoDismissMs={3000} />}
+
+      {/* ─── Close Complaint Modal ─── */}
+      {showCloseModal && (
+        <Modal
+          title="Close Complaint"
+          onClose={() => setShowCloseModal(false)}
+          footer={
+            <>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowCloseModal(false)}
+                disabled={mutationLoading}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-sm"
+                style={{ background: '#1a7a4a', color: '#fff' }}
+                onClick={handleCloseComplaint}
+                disabled={mutationLoading}
+              >
+                {mutationLoading ? 'Closing…' : 'Confirm Close'}
+              </button>
+            </>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '8px 0', textAlign: 'center' }}>
+            <AlertTriangle size={36} color="#c9a84c" />
+            <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: 0 }}>
+              This complaint will be <strong>permanently closed</strong>. This action cannot be undone.
+              All evidence locks will be preserved for records.
+            </p>
+          </div>
+        </Modal>
+      )}
+
+      {/* ─── Reject Complaint Modal ─── */}
+      {showRejectModal && (
+        <Modal
+          title="Reject Complaint"
+          onClose={() => setShowRejectModal(false)}
+          footer={
+            <>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowRejectModal(false)}
+                disabled={mutationLoading}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-sm"
+                style={{ background: 'var(--color-danger)', color: '#fff' }}
+                onClick={handleRejectComplaint}
+                disabled={mutationLoading}
+              >
+                {mutationLoading ? 'Rejecting…' : 'Confirm Reject'}
+              </button>
+            </>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '8px 0', textAlign: 'center' }}>
+            <AlertTriangle size={36} color="var(--color-danger)" />
+            <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--color-text-secondary)', margin: 0 }}>
+              This complaint will be marked as <strong>rejected</strong>. Please ensure you have reviewed
+              all evidence before rejecting.
+            </p>
+          </div>
+        </Modal>
+      )}
 
       <div className="two-col-wide">
         {/* ─── LEFT: Timeline ─── */}
@@ -343,65 +466,98 @@ export default function ComplaintDetailPage() {
                 </div>
               </div>
 
-              {/* Pending On */}
-              <div className="form-group">
-                <label>Pending On</label>
-                <select
-                  value={pendingOn}
-                  onChange={(e) => setPendingOn(e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius)',
-                    fontSize: 13,
-                    background: 'var(--color-bg)',
-                    width: '100%',
-                  }}
-                >
-                  <option value="">None</option>
-                  {pendingOptions.map((p) => (
-                    <option key={p} value={p}>{statusLabel(p)}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Update Status */}
-              {csTransitions.length > 0 && (
+              {detail.complaint_status === 'closed' ? (
+                <div style={{ marginTop: 16 }}>
+                  <span className="badge badge-closed" style={{ filter: 'grayscale(100%)', display: 'block', textAlign: 'center', padding: '8px', opacity: 0.8, background: '#333', color: '#fff', borderRadius: '4px', border: '1px solid #555' }}>
+                    CLOSED
+                  </span>
+                </div>
+              ) : (
                 <>
-                  <button
-                    className="btn btn-primary btn-sm btn-full"
-                    onClick={() => setShowStatusSelect(!showStatusSelect)}
-                    style={{ marginBottom: 8 }}
-                  >
-                    Update Status <ChevronDown size={14} />
-                  </button>
-                  {showStatusSelect && (
-                    <div className="status-select-group">
-                      {csTransitions.map((s) => (
-                        <button
-                          key={s}
-                          className="status-option"
-                          onClick={() => handleStatusUpdate(s)}
-                          disabled={statusUpdating}
-                        >
-                          <span className={`badge badge-${s}`}>{statusLabel(s)}</span>
-                        </button>
+                  {/* Pending On */}
+                  <div className="form-group">
+                    <label>Pending On</label>
+                    <select
+                      value={pendingOn}
+                      onChange={(e) => setPendingOn(e.target.value)}
+                      style={{
+                        padding: '8px 12px',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius)',
+                        fontSize: 13,
+                        background: 'var(--color-bg)',
+                        width: '100%',
+                      }}
+                    >
+                      <option value="">None</option>
+                      {pendingOptions.map((p) => (
+                        <option key={p} value={p}>{statusLabel(p)}</option>
                       ))}
-                    </div>
+                    </select>
+                  </div>
+
+                  {/* Update Status */}
+                  {csTransitions.length > 0 && (
+                    <>
+                      <button
+                        className="btn btn-primary btn-sm btn-full"
+                        onClick={() => setShowStatusSelect(!showStatusSelect)}
+                        style={{ marginBottom: 8 }}
+                      >
+                        Update Status <ChevronDown size={14} />
+                      </button>
+                      {showStatusSelect && (
+                        <div className="status-select-group">
+                          {csTransitions.map((s) => (
+                            <button
+                              key={s}
+                              className="status-option"
+                              onClick={() => handleStatusUpdate(s)}
+                              disabled={statusUpdating}
+                            >
+                              <span className={`badge badge-${s}`}>{statusLabel(s)}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Escalate button — Non-Management only */}
+                  {!isManagement && detail.complaint_status === 'resolved' && (
+                    <button
+                      className="btn btn-danger btn-sm btn-full"
+                      onClick={handleEscalate}
+                      disabled={statusUpdating}
+                      style={{ marginTop: 12 }}
+                    >
+                      Escalate to Manager
+                    </button>
+                  )}
+
+                  {/* Management Direct Actions */}
+                  {isManagement && detail.complaint_status === 'resolved' && (
+                    <button
+                      className="btn btn-sm btn-full"
+                      onClick={() => setShowCloseModal(true)}
+                      disabled={statusUpdating || mutationLoading}
+                      style={{ marginTop: 12, background: '#1a7a4a', color: '#fff' }}
+                    >
+                      Close Complaint
+                    </button>
+                  )}
+
+                  {isManagement && (detail.complaint_status === 'resolved' || detail.complaint_status === 'investigating') && (
+                    <button
+                      className="btn btn-danger btn-sm btn-full"
+                      onClick={() => setShowRejectModal(true)}
+                      disabled={statusUpdating || mutationLoading}
+                      style={{ marginTop: 12 }}
+                    >
+                      Reject Complaint
+                    </button>
                   )}
                 </>
-              )}
-
-              {/* Escalate button — CS cannot close/reject */}
-              {(detail.complaint_status === 'resolved') && (
-                <button
-                  className="btn btn-danger btn-sm btn-full"
-                  onClick={handleEscalate}
-                  disabled={statusUpdating}
-                  style={{ marginTop: 12 }}
-                >
-                  Escalate to Manager
-                </button>
               )}
             </div>
           </div>

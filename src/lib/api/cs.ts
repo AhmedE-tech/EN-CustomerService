@@ -221,8 +221,8 @@ export async function fetchOperationalRequests(): Promise<OperationalRequest[]> 
 
   const rows: OperationalRequest[] = (Array.isArray(data) ? data : []).map((r: any) => ({
     id: r.id as string,
-    type: r.type as string,
-    status: r.status as string,
+    type: r.type as OperationalRequest['type'],
+    status: r.status as OperationalRequest['status'],
     reason: (r.reason as string) || '',
     created_at: r.created_at as string,
     customer_name: (r.customer_name as string) || 'Unknown',
